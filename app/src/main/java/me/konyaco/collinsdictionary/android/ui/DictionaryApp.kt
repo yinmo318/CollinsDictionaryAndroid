@@ -296,7 +296,9 @@ private fun WordHeader(
             }
         }
 
-        section.frequency?.let(::WordFrequency)
+        section.frequency?.let { frequency ->
+            WordFrequency(frequency)
+        }
     }
 }
 
@@ -373,7 +375,9 @@ private fun DefinitionEntry(entry: DefinitionEntry) {
         }
 
         DefinitionBlock(entry.definition)
-        entry.extraDefinitions.forEach(::DefinitionBlock)
+        entry.extraDefinitions.forEach { definition ->
+            DefinitionBlock(definition)
+        }
         Divider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
     }
 }
@@ -389,7 +393,9 @@ private fun DefinitionBlock(definition: Definition) {
             fontSize = 16.sp,
             lineHeight = 23.sp,
         )
-        definition.examples.forEach(::ExampleSentence)
+        definition.examples.forEach { example ->
+            ExampleSentence(example)
+        }
         if (definition.synonyms.isNotEmpty()) {
             FlowRow(
                 modifier = Modifier.padding(start = 18.dp),
