@@ -1,57 +1,119 @@
 # Collins Dictionary Android
 
-Android-only Collins Dictionary client based on the original multiplatform project.
+An unofficial Android dictionary client for looking up English words through
+Collins Online Dictionary pages. The app focuses on the COBUILD dictionary
+section and presents definitions in a native Android Compose interface.
 
-The app still reads definitions from Collins Online Dictionary pages and parses the
-COBUILD section. It is for learning purposes only and is not affiliated with or
-licensed by Collins.
+This project is not affiliated with, endorsed by, or licensed by Collins. The
+Collins name and dictionary content belong to their respective owners.
 
-## Open in Android Studio
+## Features
 
-1. Open this folder in Android Studio:
-   `D:\CollinsDictionary\CollinsDictionaryAndroid`
-2. Let Android Studio sync Gradle.
-3. Build or run the `app` configuration.
+- Search English words from an Android app.
+- Display COBUILD definitions, word forms, word frequency, examples, synonyms,
+  IPA pronunciation, and pronunciation audio when available.
+- Show spelling suggestions when Collins returns similar alternatives.
+- Cache lookup results locally and refresh cached entries when online.
+- Support light and dark system themes.
+- Build debug APKs automatically with GitHub Actions.
 
-The project is a single Android application module. The original desktop and
-multiplatform modules are not included in this new project.
+## Android Requirements
 
-## Build on GitHub Actions
+- Minimum SDK: Android 6.0, API 23
+- Target SDK: Android 15, API 35
+- Required permission: `android.permission.INTERNET`
 
-This project includes `.github/workflows/build-debug-apk.yml`.
+The app only uses network access to request dictionary pages and pronunciation
+audio. Cached search data is stored locally in the app's private storage.
 
-Push this folder as a GitHub repository, then open the repository's Actions tab
-and run **Build Debug APK**. The generated debug APK is uploaded as an artifact
-named `collins-dictionary-debug-apk`.
+## Download and Install
 
-The workflow runs:
+For testing builds, open the repository's **Actions** tab, run **Build Debug
+APK**, then download the `collins-dictionary-debug-apk` artifact.
 
-```bash
-./gradlew :app:assembleDebug --no-daemon
-```
-
-The APK is produced at:
+Debug APK output:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## What Changed
+Debug APKs are signed with the default Android debug key and are suitable for
+personal testing only.
 
-- Removed Kotlin Multiplatform and desktop packaging.
-- Removed Koin; the Android app owns its repository and cache setup directly.
-- Replaced raw URL string concatenation with OkHttp `HttpUrl` builders.
-- Added safer local cache file names using SHA-256 keys instead of raw query text.
-- Added atomic cache writes and corrupt-cache deletion.
-- The UI consumes cached results first and then continues to refresh from the
-  network, instead of stopping after the first cached emission.
-- Search-not-found alternatives are displayed as clickable chips.
-- Parser failures are less likely to crash the app because missing DOM nodes are
-  treated as absent fields where possible.
-- Android pronunciation playback now uses `MediaPlayer.prepareAsync()` and
-  releases resources consistently.
+## Build from Source
 
-## Notes
+Open this folder in Android Studio:
 
-Collins can change its page structure at any time. If definitions stop loading,
-update `CollinsHtmlParser.kt` first and add fixture tests for the new HTML shape.
+```text
+D:\CollinsDictionary\CollinsDictionaryAndroid
+```
+
+Let Android Studio sync Gradle, then build or run the `app` configuration.
+
+Command line build:
+
+```bash
+./gradlew :app:assembleDebug --no-daemon
+```
+
+## GitHub Actions
+
+The project includes:
+
+```text
+.github/workflows/build-debug-apk.yml
+```
+
+The workflow installs JDK 17, prepares the Gradle wrapper, runs:
+
+```bash
+./gradlew :app:assembleDebug --no-daemon
+```
+
+and uploads the debug APK as an artifact.
+
+## Release Builds
+
+For public distribution, create a release signing key and configure Android
+Gradle signing in `app/build.gradle.kts` or through Android Studio:
+
+```text
+Build > Generate Signed Bundle / APK
+```
+
+Recommended release artifact:
+
+```bash
+./gradlew :app:bundleRelease
+```
+
+Before publishing, review Collins' website terms and trademark requirements.
+Because this app retrieves and parses Collins web pages, commercial or public
+store distribution may require permission from the content owner.
+
+## Project Structure
+
+```text
+app/src/main/java/me/konyaco/collinsdictionary/android/
+audio/      Pronunciation playback
+data/       Repository and lookup flow
+domain/     Dictionary data models
+network/    Collins HTTP client and HTML parser
+storage/    Local cache
+ui/         Jetpack Compose UI
+```
+
+## Known Limitations
+
+- The parser depends on Collins page structure. If Collins changes its HTML,
+  lookup or parsing may fail until `CollinsHtmlParser.kt` is updated.
+- The app currently focuses on COBUILD entries.
+- American Dictionary, English Dictionary, daily word, multi-tab browsing, and
+  full release signing automation are not included.
+
+## Development Notes
+
+This Android-only project was derived from the original multiplatform codebase
+and simplified for Android distribution. It removes desktop packaging and shared
+multiplatform setup, uses Android-native Compose, improves cache safety, and
+handles Collins search redirects more defensively.
