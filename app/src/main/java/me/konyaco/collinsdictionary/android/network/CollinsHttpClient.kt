@@ -28,42 +28,50 @@ class CollinsHttpClient(
         .build()
 
     suspend fun search(word: String): SearchResult = withContext(Dispatchers.IO) {
-        noRedirectClient.newCall(request(buildSearchUrl(word))).execute().use { response ->
-            if (!response.isRedirect) {
-                throw IOException("Unexpected Collins search response: HTTP ${response.code}")
-            }
-
-            val redirectedUrl = response.header("Location")
-                ?.let(::resolveUrl)
-                ?: throw IOException("Collins search did not include a redirect location.")
-
-            when {
-                redirectedUrl.isDictionaryUrl() -> {
-                    val redirectedWord = redirectedUrl.pathSegments.lastOrNull()
-                        ?.takeIf { it.isNotBlank() }
-                        ?: throw IOException("Collins dictionary redirect did not include a word.")
-
-                    if (redirectedWord.equals(word, ignoreCase = true)) {
-                        SearchResult.PreciseWord(redirectedWord)
-                    } else {
-                        SearchResult.Redirect(redirectedWord)
-                    }
+        var currentUrl = buildSearchUrl(word)
+        repeat(MAX_SEARCH_REDIRECTS) {
+            noRedirectClient.newCall(request(currentUrl)).execute().use { response ->
+                if (!response.isRedirect) {
+                    throw IOException("Unexpected Collins search response: HTTP ${response.code}")
                 }
-                redirectedUrl.isSpellcheckUrl() -> {
-                    val spellcheckHtml = followRedirectClient.newCall(request(redirectedUrl))
-                        .execute()
-                        .use { spellcheckResponse ->
-                            if (!spellcheckResponse.isSuccessful) {
-                                throw IOException("Collins spellcheck failed: HTTP ${spellcheckResponse.code}")
-                            }
-                            spellcheckResponse.body?.string().orEmpty()
+
+                val redirectedUrl = response.header("Location")
+                    ?.let(::resolveUrl)
+                    ?: throw IOException("Collins search did not include a redirect location.")
+
+                when {
+                    redirectedUrl.isDictionaryUrl() -> {
+                        val redirectedWord = redirectedUrl.pathSegments.lastOrNull()
+                            ?.takeIf { it.isNotBlank() }
+                            ?: throw IOException("Collins dictionary redirect did not include a word.")
+
+                        return@withContext if (redirectedWord.equals(word, ignoreCase = true)) {
+                            SearchResult.PreciseWord(redirectedWord)
+                        } else {
+                            SearchResult.Redirect(redirectedWord)
                         }
+                    }
+                    redirectedUrl.isSpellcheckUrl() -> {
+                        val spellcheckHtml = followRedirectClient.newCall(request(redirectedUrl))
+                            .execute()
+                            .use { spellcheckResponse ->
+                                if (!spellcheckResponse.isSuccessful) {
+                                    throw IOException("Collins spellcheck failed: HTTP ${spellcheckResponse.code}")
+                                }
+                                spellcheckResponse.body?.string().orEmpty()
+                            }
 
-                    SearchResult.NotFound(parser.parseAlternatives(spellcheckHtml))
+                        return@withContext SearchResult.NotFound(parser.parseAlternatives(spellcheckHtml))
+                    }
+                    redirectedUrl.isSearchUrl() -> {
+                        currentUrl = redirectedUrl
+                    }
+                    else -> throw IOException("Unexpected Collins redirect: $redirectedUrl")
                 }
-                else -> throw IOException("Unexpected Collins redirect: $redirectedUrl")
             }
         }
+
+        throw IOException("Too many Collins search redirects for \"$word\".")
     }
 
     suspend fun getDefinition(word: String): String = withContext(Dispatchers.IO) {
@@ -86,6 +94,7 @@ class CollinsHttpClient(
     private fun buildSearchUrl(word: String): HttpUrl {
         return baseUrl.newBuilder()
             .addPathSegment("search")
+            .addPathSegment("")
             .addQueryParameter("dictCode", "english")
             .addQueryParameter("q", word)
             .build()
@@ -112,7 +121,12 @@ class CollinsHttpClient(
         return host == baseUrl.host && encodedPath.startsWith("/spellcheck/english")
     }
 
+    private fun HttpUrl.isSearchUrl(): Boolean {
+        return host == baseUrl.host && (encodedPath == "/search" || encodedPath == "/search/")
+    }
+
     companion object {
+        private const val MAX_SEARCH_REDIRECTS = 4
         private const val USER_AGENT =
             "Mozilla/5.0 (Android) CollinsDictionaryAndroid/2.0"
     }
